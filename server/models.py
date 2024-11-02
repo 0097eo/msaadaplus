@@ -4,18 +4,18 @@ from sqlalchemy.orm import validates
 from sqlalchemy import Enum, func
 import enum
 
-class UserType(Enum):
+class UserType(str, enum.Enum):
     DONOR = "donor"
     CHARITY = "charity"
     ADMIN = "admin"
 
-class DonationType(Enum):
+class DonationType(str, enum.Enum):
     ONE_TIME = "one_time"
     MONTHLY = "monthly"
     QUARTERLY = "quarterly"
     ANNUALLY = "annually"
 
-class CharityStatus(Enum):
+class CharityStatus(str, enum.Enum):
     APPROVED = "approved"
     PENDING = "pending"
     REJECTED = "rejected"
