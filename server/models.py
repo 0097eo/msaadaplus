@@ -32,6 +32,8 @@ class User(db.Model):
     verification_code = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=func.now())
     updated_at = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
+    reset_token = db.Column(db.String(100))
+    reset_token_expires = db.Column(db.DateTime)
 
     #Rlshps
     donor_profile = db.relationship('DonorProfile', backref='user', uselist=False)

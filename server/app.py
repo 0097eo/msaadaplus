@@ -5,7 +5,7 @@ import smtplib
 from flask_restful import Resource
 from flask import request
 import secrets
-from datetime import timedelta
+from datetime import timedelta, datetime
 import re
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy.orm import Session
@@ -392,12 +392,90 @@ class ProfileDetails(Resource):
             return {'error': str(e)}, 500
 
 
+class RequestPasswordReset(Resource):
+    def post(self):
+        try:
+            data = request.get_json()
+            
+            if 'email' not in data:
+                return {'error': 'Email is required'}, 400
+            
+            user = User.query.filter_by(email=data['email']).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            reset_token = secrets.token_urlsafe(32)
+            user.reset_token = reset_token
+            user.reset_token_expires = datetime.utcnow() + timedelta(hours=24)
+            db.session.commit()
+            
+            # Send reset email
+            subject = 'MsaadaPlus - Password Reset Request'
+            body = f'''
+            You have requested to reset your password.
+            
+            Please use the following token to reset your password: {reset_token}
+            
+            This token will expire in 24 hours.
+            
+            If you did not request this reset, please ignore this email.
+            
+            Best regards,
+            MsaadaPlus Team
+            '''
+            
+            try:
+                send_email(user.email, subject, body)
+                return {'message': 'Password reset instructions sent to email'}, 200
+            except Exception as e:
+                db.session.rollback()
+                return {'error': 'Failed to send reset email'}, 500
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+class ResetPassword(Resource):
+    def post(self):
+        try:
+            data = request.get_json()
+            
+            if not all(key in data for key in ['email', 'reset_token', 'new_password']):
+                return {'error': 'Email, reset token, and new password are required'}, 400
+            
+            if not validate_password(data['new_password']):
+                return {'error': 'Password must be at least 8 characters long and contain uppercase, lowercase, and numbers'}, 400
+            
+            user = User.query.filter_by(email=data['email']).first()
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            if not user.reset_token or user.reset_token != data['reset_token']:
+                return {'error': 'Invalid reset token'}, 400
+            
+            if user.reset_token_expires < datetime.utcnow():
+                return {'error': 'Reset token has expired'}, 400
+            
+            user.password = data['new_password']
+            user.reset_token = None
+            user.reset_token_expires = None
+            db.session.commit()
+            
+            return {'message': 'Password reset successful'}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+
 api.add_resource(ProfileDetails, '/profile-details')
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
 api.add_resource(ResendVerification, '/resend-verification')
 api.add_resource(Login, '/login')
 api.add_resource(UpdateProfile, '/update-profile')
+api.add_resource(RequestPasswordReset, '/password/reset-request')
+api.add_resource(ResetPassword, '/password/reset')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
