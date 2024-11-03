@@ -284,7 +284,115 @@ class UpdateProfile(Resource):
         except Exception as e:
             db.session.rollback()
             return {'error': str(e)}, 500
+        
+class ProfileDetails(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            user_id = get_jwt_identity()
+            user = db.session.get(User, user_id)
+            if not user:
+                return {'error': 'User not found'}, 404
 
+            if user.user_type == UserType.DONOR:
+                profile = user.donor_profile
+                if not profile:
+                    return {'error': 'Donor profile not found'}, 404
+
+                # Get all donations and recurring donations
+                donations = [{
+                    'id': d.id,
+                    'amount': float(d.amount),
+                    'donation_type': d.donation_type.value,
+                    'payment_status': d.payment_status,
+                    'charity_name': d.charity_profile.name,
+                    'created_at': d.created_at.strftime('%Y-%m-%d')
+                } for d in profile.donations]
+
+                recurring_donations = [{
+                    'id': rd.id,
+                    'amount': float(rd.amount),
+                    'frequency': rd.frequency.value,
+                    'is_active': rd.is_active,
+                    'next_donation_date': rd.next_donation_date.strftime('%Y-%m-%d'),
+                    'charity_name': rd.charity_profile.name,
+                    'created_at': rd.created_at.strftime('%Y-%m-%d')
+                } for rd in profile.recurring_donations]
+
+                return {
+                    'profile_type': 'donor',
+                    'profile': {
+                        'id': profile.id,
+                        'full_name': profile.full_name,
+                        'phone': profile.phone,
+                        'is_anonymous': profile.is_anonymous,
+                        'notification_preference': profile.notification_preference,
+                        'email': user.email,
+                        'username': user.username,
+                        'created_at': user.created_at.strftime('%Y-%m-%d')
+                    },
+                    'donations': donations,
+                    'recurring_donations': recurring_donations
+                }, 200
+
+            elif user.user_type == UserType.CHARITY:
+                profile = user.charity_profile
+                if not profile:
+                    return {'error': 'Charity profile not found'}, 404
+
+                # Get beneficiaries, stories, and donations
+                beneficiaries = [{
+                    'id': b.id,
+                    'name': b.name,
+                    'age': b.age,
+                    'school': b.school,
+                    'location': b.location
+                } for b in profile.beneficiaries]
+
+                stories = [{
+                    'id': s.id,
+                    'title': s.title,
+                    'content': s.content,
+                    'image_url': s.image_url,
+                    'created_at': s.created_at.strftime('%Y-%m-%d')
+                } for s in profile.stories]
+
+                donations = [{
+                    'id': d.id,
+                    'amount': float(d.amount),
+                    'donation_type': d.donation_type.value,
+                    'payment_status': d.payment_status,
+                    'donor_name': d.donor_profile.full_name if not d.donor_profile.is_anonymous else 'Anonymous',
+                    'created_at': d.created_at.strftime('%Y-%m-%d')
+                } for d in profile.donations]
+
+                return {
+                    'profile_type': 'charity',
+                    'profile': {
+                        'id': profile.id,
+                        'name': profile.name,
+                        'description': profile.description,
+                        'registration_number': profile.reqistration_number,
+                        'status': profile.status.value,
+                        'contact_email': profile.contact_email,
+                        'contact_phone': profile.contact_phone,
+                        'bank_account': profile.bank_account,
+                        'email': user.email,
+                        'username': user.username,
+                        'created_at': user.created_at.strftime('%Y-%m-%d')
+                    },
+                    'beneficiaries': beneficiaries,
+                    'stories': stories,
+                    'donations': donations
+                }, 200
+
+            return {'error': 'Invalid user type'}, 400
+
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+
+api.add_resource(ProfileDetails, '/profile-details')
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
 api.add_resource(ResendVerification, '/resend-verification')
