@@ -29,7 +29,7 @@ class User(db.Model):
     username = db.Column(db.String(255), nullable=False, unique=True)
     password_hash = db.Column(db.String(255), nullable=False)
     user_type = db.Column(db.Enum(UserType), nullable=False)
-    verification_code = db.Column(db.String(255), nullable=False)
+    verification_code = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=func.now())
     updated_at = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
 
