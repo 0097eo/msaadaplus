@@ -7,7 +7,8 @@ from flask import request
 import secrets
 from datetime import timedelta
 import re
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from sqlalchemy.orm import Session
 
 def validate_email(email):
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
@@ -232,11 +233,63 @@ class Login(Resource):
             
         except Exception as e:
             return {'error': str(e)}, 500
+        
+
+class UpdateProfile(Resource):
+    @jwt_required()
+    def put(self):
+        try:
+            user_id = get_jwt_identity()
+            user = db.session.get(User, user_id)
+            if not user:
+                return {'error': 'User not found'}, 404
+            
+            data = request.get_json()
+            
+            if user.user_type == UserType.DONOR:
+                profile = user.donor_profile
+                if not profile:
+                    return {'error': 'Donor profile not found'}, 404
+                
+                # Update donor profile fields
+                if 'full_name' in data:
+                    profile.full_name = data['full_name']
+                if 'phone' in data:
+                    profile.phone = data['phone']
+                if 'is_anonymous' in data:
+                    profile.is_anonymous = data['is_anonymous']
+                if 'notification_preference' in data:
+                    profile.notification_preference = data['notification_preference']
+                
+            elif user.user_type == UserType.CHARITY:
+                profile = user.charity_profile
+                if not profile:
+                    return {'error': 'Charity profile not found'}, 404
+                
+                # Update charity profile fields
+                if 'name' in data:
+                    profile.name = data['name']
+                if 'description' in data:
+                    profile.description = data['description']
+                if 'contact_email' in data:
+                    profile.contact_email = data['contact_email']
+                if 'contact_phone' in data:
+                    profile.contact_phone = data['contact_phone']
+                if 'bank_account' in data:
+                    profile.bank_account = data['bank_account']
+            
+            db.session.commit()
+            return {'message': 'Profile updated successfully'}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
 
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
 api.add_resource(ResendVerification, '/resend-verification')
 api.add_resource(Login, '/login')
+api.add_resource(UpdateProfile, '/update-profile')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
