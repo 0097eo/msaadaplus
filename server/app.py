@@ -3,10 +3,11 @@ from models import User, UserType, DonorProfile, CharityProfile, CharityStatus
 from email.mime.text import MIMEText
 import smtplib
 from flask_restful import Resource
-from flask import request, jsonify
+from flask import request
 import secrets
-from datetime import datetime
+from datetime import timedelta
 import re
+from flask_jwt_extended import create_access_token
 
 def validate_email(email):
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
@@ -201,11 +202,41 @@ class ResendVerification(Resource):
         except Exception as e:
             db.session.rollback()
             return {'error': str(e)}, 500
+        
+class Login(Resource):
+    def post(self):
+        try:
+            data = request.get_json()
 
+            if not all(key in data for key in ['email', 'password']):
+                return {'error': 'Email and password are required'}, 400
+            
+            user = User.query.filter_by(email=data['email']).first()
+            if not user or not user.verify_password(data['password']):
+                return {'error': 'Invalid email or password'}, 401
+            
+            if user.verification_code:
+                return {'error': 'Email not yet verified'}, 401
+            
+            access_token = create_access_token(
+                identity=user.id,
+                additional_claims={'user_type': user.user_type.value},
+                expires_delta=timedelta(days=1)
+            )
+            
+            return {
+                'access_token': access_token,
+                'user_id': user.id,
+                'user_type': user.user_type.value
+            }, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
 
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
 api.add_resource(ResendVerification, '/resend-verification')
+api.add_resource(Login, '/login')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
