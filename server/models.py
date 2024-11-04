@@ -32,8 +32,7 @@ class User(db.Model):
     verification_code = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=func.now())
     updated_at = db.Column(db.DateTime, default=func.now(), onupdate=func.now())
-    reset_token = db.Column(db.String(100))
-    reset_token_expires = db.Column(db.DateTime)
+    
 
     #Rlshps
     donor_profile = db.relationship('DonorProfile', backref='user', uselist=False)
@@ -112,7 +111,7 @@ class Donation(db.Model):
     amount = db.Column(db.Numeric(10, 2), nullable=False)
     donation_type = db.Column(db.Enum(DonationType), nullable=False)
     payment_status = db.Column(db.String(255), default='pending')
-    created_at = db.Column(db.Date, default=func.now())
+    created_at = db.Column(db.DateTime, default=func.now())
 
 class RecurringDonation(db.Model):
     __tablename__ = 'recurring_donations'
@@ -124,7 +123,7 @@ class RecurringDonation(db.Model):
     frequency = db.Column(Enum(DonationType), nullable=False)
     next_donation_date = db.Column(db.DateTime, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.Date, default=func.now())
+    created_at = db.Column(db.DateTime, default=func.now())
 
 class InventoryItem(db.Model):
     __tablename__ = 'inventory_items'
