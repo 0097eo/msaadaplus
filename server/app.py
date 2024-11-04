@@ -1,5 +1,5 @@
 from config import app, db, api, bcrypt
-from models import User, UserType, DonorProfile, CharityProfile, CharityStatus, Donation, RecurringDonation, InventoryItem, Story, Beneficiary
+from models import User, UserType, DonorProfile, CharityProfile, CharityStatus, Donation, DonationType, RecurringDonation, InventoryItem, Story, Beneficiary
 from email.mime.text import MIMEText
 import smtplib
 from flask_restful import Resource
@@ -13,14 +13,37 @@ import cloudinary
 from cloudinary.uploader import upload
 from cloudinary.utils import cloudinary_url
 from functools import wraps
+import os
+from dotenv import load_dotenv
+import requests
+from requests.auth import HTTPBasicAuth
+import base64
+import calendar
+
+load_dotenv()
+# Daraja API credentials
+DARAJA_CONSUMER_KEY = os.getenv('DARAJA_CONSUMER_KEY')
+DARAJA_CONSUMER_SECRET = os.getenv('DARAJA_CONSUMER_SECRET')
+DARAJA_SHORTCODE = os.getenv('DARAJA_SHORTCODE')
+DARAJA_PASSKEY = os.getenv('DARAJA_PASSKEY')
+DARAJA_BASE_URL = "https://sandbox.safaricom.co.ke"
+
+#daraja accesstoken
+def generate_daraja_token():
+    auth_url = f"{DARAJA_BASE_URL}/oauth/v1/generate?grant_type=client_credentials"
+    response = requests.get(auth_url, auth=HTTPBasicAuth(DARAJA_CONSUMER_KEY, DARAJA_CONSUMER_SECRET))
+    response_json = response.json()
+    return response_json['access_token']
+
+
 
 def configure_cloudinary():
     """Configure Cloudinary with environment variables"""
     try:
         cloudinary.config(
-            cloud_name='dmze7emzl',
-            api_key='879125659435828',
-            api_secret="EP7n75hw2qvKo05IaAJv40RiW0o"
+            cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
+            api_key=os.getenv('CLOUDINARY_API_KEY'),
+            api_secret=os.getenv('CLOUDINARY_API_SECRET')
         )
     except Exception as e:
         print(f"Error configuring Cloudinary: {str(e)}")
@@ -798,6 +821,75 @@ class CharityDetail(Resource):
             db.session.rollback()
             return {'error': str(e)}, 500
         
+    @jwt_required()
+    def get(self, charity_id):
+        """Get details of a specific charity"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+
+            # Get charity profile
+            charity = db.session.get(CharityProfile, charity_id)
+            if not charity:
+                return {'error': 'Charity not found'}, 404
+
+            # Check if the user is an admin or the charity owner
+            if user:
+                # Serialize the charity profile
+                charity_data = {
+                    'id': charity.id,
+                    'name': charity.name,
+                    'description': charity.description,
+                    'registration_number': charity.reqistration_number,
+                    'status': charity.status,
+                    'contact_email': charity.contact_email,
+                    'contact_phone': charity.contact_phone,
+                    'bank_account': charity.bank_account
+                }
+
+                # Get associated data
+                beneficiaries = [
+                    {
+                        'id': b.id,
+                        'name': b.name,
+                        'age': b.age,
+                        'school': b.school,
+                        'location': b.location
+                    } for b in charity.beneficiaries
+                ]
+
+                stories = [
+                    {
+                        'id': s.id,
+                        'title': s.title,
+                        'content': s.content,
+                        'image_url': s.image_url,
+                        'created_at': s.created_at.strftime('%Y-%m-%d')
+                    } for s in charity.stories
+                ]
+
+                inventory_items = [
+                    {
+                        'id': i.id,
+                        'name': i.name,
+                        'quantity': i.quantity,
+                        'beneficiary_id': i.beneficiary_id,
+                    } for i in charity.inventory_items
+                ]
+
+                charity_data['beneficiaries'] = beneficiaries
+                charity_data['stories'] = stories
+                charity_data['inventory_items'] = inventory_items
+
+                return charity_data, 200
+            else:
+                return {'error': 'Unauthorized'}, 403
+
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+        
 class Stories(Resource):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
     MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
@@ -1133,6 +1225,197 @@ class Inventory(Resource):
             return {'error': str(e)}, 500
 
 
+class DonationResource(Resource):
+    @jwt_required()
+    def post(self):
+        user_id = get_jwt_identity()
+        data = request.get_json()
+
+        donor_profile = DonorProfile.query.filter_by(user_id=user_id).first()
+        if not donor_profile:
+            return {'message': 'Donor profile not found'}, 404
+
+        charity_profile = db.session.get(CharityProfile, data['charity_id'])
+        if not charity_profile:
+            return {'message': 'Charity profile not found'}, 404
+
+        # Ensure 'amount' is present in the data payload
+        amount = data.get('amount')
+        if not amount:
+            return {'message': 'Donation amount is required'}, 400
+
+        # Create Donation entry
+        donation = Donation(
+            donor_id=donor_profile.id,
+            charity_id=charity_profile.id,
+            amount=amount,
+            donation_type=data.get('donation_type')
+        )
+        db.session.add(donation)
+        db.session.commit()
+
+        # Initiate M-Pesa Payment
+        try:
+            access_token = generate_daraja_token()
+            payment_url = f"{DARAJA_BASE_URL}/mpesa/stkpush/v1/processrequest"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S') 
+            password = base64.b64encode(f"{DARAJA_SHORTCODE}{DARAJA_PASSKEY}{timestamp}".encode()).decode('utf-8')
+            payload = {
+                "BusinessShortCode": DARAJA_SHORTCODE,
+                "Password": password,
+                "Timestamp": timestamp,
+                "TransactionType": "CustomerPayBillOnline",
+                "Amount": amount,
+                "PartyA": donor_profile.phone,
+                "PartyB": DARAJA_SHORTCODE,
+                "PhoneNumber": donor_profile.phone,
+                "CallBackURL": "https://mydomain.com/path",
+                "AccountReference": f"Donation-{donation.id}",
+                "TransactionDesc": f"Payment for Donation number-{donation.id}"
+            }
+
+            response = requests.post(payment_url, json=payload, headers=headers)
+            response_json = response.json()
+
+            if response_json.get("ResponseCode") == "0":
+                return {
+                    'message': 'Order placed successfully, awaiting payment confirmation',
+                    'donation_id': donation.id,
+                    'amount': amount,
+                    'payment_request': response_json
+                }, 201
+            else:
+                return {
+                    'message': 'Failed to initiate payment',
+                    'error': response_json
+                }, 400
+
+        except requests.exceptions.RequestException as e:
+            return {
+                'message': 'An error occurred while initiating payment',
+                'error': str(e)
+            }, 500
+
+
+class RecurringDonationResource(Resource):
+    @jwt_required()
+    def post(self):
+        user_id = get_jwt_identity()
+        data = request.get_json()
+
+        # Verify donor profile
+        donor_profile = DonorProfile.query.filter_by(user_id=user_id).first()
+        if not donor_profile:
+            return {'message': 'Donor profile not found'}, 404
+
+        # Verify charity profile
+        charity_profile = CharityProfile.query.get(data.get('charity_id'))
+        if not charity_profile:
+            return {'message': 'Charity profile not found'}, 404
+
+        # Validate donation data
+        amount = data.get('amount')
+        frequency = data.get('frequency')
+
+        if not amount:
+            return {'message': 'Donation amount is required'}, 400
+        if not frequency:
+            return {'message': 'Donation frequency is required'}, 400
+
+        # Calculate next donation date based on frequency
+        current_date = datetime.now()
+        next_donation_date = self.calculate_next_donation_date(current_date, frequency)
+        if not next_donation_date:
+            return {'message': 'Invalid donation frequency'}, 400
+
+        # Create the recurring donation entry
+        recurring_donation = RecurringDonation(
+            donor_id=donor_profile.id,
+            charity_id=charity_profile.id,
+            amount=amount,
+            frequency=frequency,
+            next_donation_date=next_donation_date
+        )
+
+        db.session.add(recurring_donation)
+        db.session.commit()
+
+        try:
+            access_token = generate_daraja_token()
+            payment_url = f"{DARAJA_BASE_URL}/mpesa/stkpush/v1/processrequest"
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            timestamp = current_date.strftime('%Y%m%d%H%M%S') 
+            password = base64.b64encode(f"{DARAJA_SHORTCODE}{DARAJA_PASSKEY}{timestamp}".encode()).decode('utf-8')
+            payload = {
+                "BusinessShortCode": DARAJA_SHORTCODE,
+                "Password": password,
+                "Timestamp": timestamp,
+                "TransactionType": "CustomerPayBillOnline",
+                "Amount": amount,
+                "PartyA": donor_profile.phone,
+                "PartyB": DARAJA_SHORTCODE,
+                "PhoneNumber": donor_profile.phone,
+                "CallBackURL": "https://mydomain.com/path",
+                "AccountReference": f"RecurringDonation-{recurring_donation.id}",
+                "TransactionDesc": f"Recurring donation payment for donation-{recurring_donation.id}"
+            }
+
+            response = requests.post(payment_url, json=payload, headers=headers)
+            response_json = response.json()
+
+            if response_json.get("ResponseCode") == "0":
+                return {
+                    'message': 'Recurring donation created successfully, awaiting payment confirmation',
+                    'recurring_donation_id': recurring_donation.id,
+                    'amount': amount,
+                    'next_donation_date': next_donation_date.strftime('%Y-%m-%d'),
+                    'payment_request': response_json
+                }, 201
+            else:
+                return {
+                    'message': 'Failed to initiate payment',
+                    'error': response_json
+                }, 400
+
+        except requests.exceptions.RequestException as e:
+            return {
+                'message': 'An error occurred while initiating payment',
+                'error': str(e)
+            }, 500
+
+    def calculate_next_donation_date(self, current_date, frequency):
+        """Calculate the next donation date based on frequency."""
+        if frequency == DonationType.MONTHLY:
+            # Add one month to the current date
+            month = current_date.month + 1 if current_date.month < 12 else 1
+            year = current_date.year if current_date.month < 12 else current_date.year + 1
+            day = min(current_date.day, calendar.monthrange(year, month)[1])  # Ensures valid day in month
+            return current_date.replace(year=year, month=month, day=day)
+        elif frequency == DonationType.QUARTERLY:
+            # Add three months (one quarter) to the current date
+            month = current_date.month + 3
+            year = current_date.year
+            if month > 12:
+                month -= 12
+                year += 1
+            day = min(current_date.day, calendar.monthrange(year, month)[1])
+            return current_date.replace(year=year, month=month, day=day)
+        elif frequency == DonationType.ANNUALLY:
+            # Add one year to the current date
+            return current_date.replace(year=current_date.year + 1)
+        else:
+            return None  # Invalid frequency
+        
+
+api.add_resource(DonationResource, '/donation')
+api.add_resource(RecurringDonationResource, '/recurring-donation')
 api.add_resource(Stories, '/stories')
 api.add_resource(Beneficiaries, '/beneficiaries')
 api.add_resource(Inventory, '/inventory')
