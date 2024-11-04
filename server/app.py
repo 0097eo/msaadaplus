@@ -1,5 +1,5 @@
 from config import app, db, api, bcrypt
-from models import User, UserType, DonorProfile, CharityProfile, CharityStatus
+from models import User, UserType, DonorProfile, CharityProfile, CharityStatus, Donation, RecurringDonation, InventoryItem, Story, Beneficiary
 from email.mime.text import MIMEText
 import smtplib
 from flask_restful import Resource
@@ -7,7 +7,7 @@ from flask import request
 import secrets
 from datetime import timedelta, datetime
 import re
-from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.orm import Session
 
 def validate_email(email):
@@ -467,7 +467,273 @@ class ResetPassword(Resource):
             db.session.rollback()
             return {'error': str(e)}, 500
 
+class Charity(Resource):
+    @jwt_required()
+    def get(self):
+        try:
+            # Get query parameters
+            status = request.args.get('status')
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            search = request.args.get('search', '')
 
+            # Get current user's type from JWT claims
+            current_user_id = get_jwt_identity()
+            current_user = db.session.get(User, current_user_id)
+            
+            if not current_user:
+                return {'error': 'User not found'}, 404
+
+            # Build base query
+            query = db.session.query(CharityProfile)
+
+            # Apply status filter
+            if current_user.user_type == UserType.ADMIN:
+                if status:
+                    try:
+                        charity_status = CharityStatus(status)
+                        query = query.filter(CharityProfile.status == charity_status)
+                    except ValueError:
+                        return {'error': 'Invalid status value'}, 400
+                # If no status specified, show all charities for admin
+            else:
+                # Non-admins can only see approved charities
+                query = query.filter(CharityProfile.status == CharityStatus.APPROVED)
+
+            # Apply search filter if provided
+            if search:
+                search_term = f"%{search}%"
+                query = query.filter(
+                    db.or_(
+                        CharityProfile.name.ilike(search_term),
+                        CharityProfile.description.ilike(search_term)
+                    )
+                )
+
+            # Execute paginated query
+            paginated_charities = query.paginate(
+                page=page,
+                per_page=per_page,
+                error_out=False
+            )
+
+            # Prepare response data
+            charities = []
+            for charity in paginated_charities.items:
+                # Get total donation amount
+                total_donations = db.session.query(
+                    db.func.sum(Donation.amount)
+                ).filter(
+                    Donation.charity_id == charity.id,
+                    Donation.payment_status == 'completed'
+                ).scalar() or 0
+
+                # Get donor count (excluding anonymous donors)
+                donor_count = db.session.query(
+                    db.func.count(db.distinct(DonorProfile.id))
+                ).join(
+                    Donation, Donation.donor_id == DonorProfile.id
+                ).filter(
+                    Donation.charity_id == charity.id,
+                    DonorProfile.is_anonymous == False
+                ).scalar() or 0
+
+                charity_data = {
+                    'id': charity.id,
+                    'name': charity.name,
+                    'description': charity.description,
+                    'contact_email': charity.contact_email,
+                    'contact_phone': charity.contact_phone,
+                    'status': charity.status.value,  # Added status to response
+                    'registration_number': charity.reqistration_number,  # Added registration number
+                    'total_donations': float(total_donations),
+                    'donor_count': donor_count,
+                    'beneficiary_count': len(charity.beneficiaries),
+                    'story_count': len(charity.stories),
+                    'stories': [{
+                        'id': story.id,
+                        'title': story.title,
+                        'content': story.content,
+                        'image_url': story.image_url,
+                        'created_at': story.created_at.strftime('%Y-%m-%d')
+                    } for story in charity.stories[:3]]  # Include only the 3 most recent stories
+                }
+                charities.append(charity_data)
+
+            return {
+                'charities': charities,
+                'pagination': {
+                    'total_items': paginated_charities.total,
+                    'total_pages': paginated_charities.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': paginated_charities.has_next,
+                    'has_prev': paginated_charities.has_prev
+                }
+            }, 200
+
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+class CharityApplications(Resource):
+    @jwt_required()
+    def get(self):
+        """Get all charity applications (Admin only)"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.ADMIN:
+                return {'error': 'Unauthorized'}, 403
+                
+            # Get query parameters
+            status = request.args.get('status', 'pending')
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            
+            try:
+                filter_status = CharityStatus(status)
+            except ValueError:
+                return {'error': 'Invalid status value'}, 400
+                
+            # Query applications
+            query = CharityProfile.query.filter_by(status=filter_status)
+            paginated_apps = query.paginate(
+                page=page,
+                per_page=per_page,
+                error_out=False
+            )
+            
+            applications = [{
+                'id': charity.id,
+                'name': charity.name,
+                'description': charity.description,
+                'registration_number': charity.reqistration_number,
+                'contact_email': charity.contact_email,
+                'contact_phone': charity.contact_phone,
+                'status': charity.status.value,
+                'user_id': charity.user_id,
+                'created_at': charity.user.created_at.strftime('%Y-%m-%d')
+            } for charity in paginated_apps.items]
+            
+            return {
+                'applications': applications,
+                'pagination': {
+                    'total_items': paginated_apps.total,
+                    'total_pages': paginated_apps.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': paginated_apps.has_next,
+                    'has_prev': paginated_apps.has_prev
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+        
+class CharityApplicationReview(Resource):
+    @jwt_required()
+    def post(self, charity_id):
+        """Review (approve/reject) a charity application"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.ADMIN:
+                return {'error': 'Unauthorized'}, 403
+                
+            data = request.get_json()
+            if 'action' not in data:
+                return {'error': 'Action (approve/reject) is required'}, 400
+                
+            action = data['action'].lower()
+            if action not in ['approve', 'reject']:
+                return {'error': 'Invalid action. Must be approve or reject'}, 400
+                
+            # Get charity profile
+            charity = db.session.get(CharityProfile, charity_id)
+            if not charity:
+                return {'error': 'Charity not found'}, 404
+                
+            # Update status based on action
+            if action == 'approve':
+                charity.status = CharityStatus.APPROVED
+                message = 'Charity application approved'
+            else:
+                charity.status = CharityStatus.REJECTED
+                message = 'Charity application rejected'
+                
+            db.session.commit()
+            
+            # Send email notification to charity
+            subject = f'MsaadaPlus - Charity Application {action.capitalize()}d'
+            body = f'''
+            Dear {charity.name},
+            
+            Your charity application has been {action}d.
+            
+            {'You can now setup a campaign and start receiving donations.' if action == 'approve' else 'If you believe this was a mistake, please contact our support team.'}
+            
+            Best regards,
+            MsaadaPlus Team
+            '''
+            
+            try:
+                send_email(charity.contact_email, subject, body)
+            except Exception as e:
+                print(f"Error sending email: {e}")
+                
+            return {'message': message}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+class CharityDetail(Resource):
+    @jwt_required()
+    def delete(self, charity_id):
+        """Delete a charity (Admin only)"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.ADMIN:
+                return {'error': 'Unauthorized'}, 403
+                
+            # Get charity profile
+            charity = db.session.get(CharityProfile, charity_id)
+            if not charity:
+                return {'error': 'Charity not found'}, 404
+                
+            # Delete associated records first (due to foreign key constraints)
+            # Delete inventory items
+            InventoryItem.query.filter_by(charity_id=charity_id).delete()
+            
+            # Delete stories
+            Story.query.filter_by(charity_id=charity_id).delete()
+            
+            # Delete beneficiaries
+            Beneficiary.query.filter_by(charity_id=charity_id).delete()
+            
+            # Delete donations
+            Donation.query.filter_by(charity_id=charity_id).delete()
+            
+            # Delete recurring donations
+            RecurringDonation.query.filter_by(charity_id=charity_id).delete()
+            
+            # Delete the charity profile
+            db.session.delete(charity)
+            db.session.commit()
+            
+            return {'message': 'Charity deleted successfully'}, 200
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+        
 api.add_resource(ProfileDetails, '/profile-details')
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
@@ -476,6 +742,10 @@ api.add_resource(Login, '/login')
 api.add_resource(UpdateProfile, '/update-profile')
 api.add_resource(RequestPasswordReset, '/password/reset-request')
 api.add_resource(ResetPassword, '/password/reset')
+api.add_resource(Charity, '/charities')
+api.add_resource(CharityApplications, '/charity/applications')
+api.add_resource(CharityApplicationReview, '/charity/applications/<int:charity_id>/review')
+api.add_resource(CharityDetail, '/charity/<int:charity_id>')
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
