@@ -9,6 +9,70 @@ from datetime import timedelta, datetime
 import re
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy.orm import Session
+import cloudinary
+from cloudinary.uploader import upload
+from cloudinary.utils import cloudinary_url
+from functools import wraps
+
+def configure_cloudinary():
+    """Configure Cloudinary with environment variables"""
+    try:
+        cloudinary.config(
+            cloud_name='dmze7emzl',
+            api_key='879125659435828',
+            api_secret="EP7n75hw2qvKo05IaAJv40RiW0o"
+        )
+    except Exception as e:
+        print(f"Error configuring Cloudinary: {str(e)}")
+        raise
+
+def require_cloudinary(f):
+    """Decorator to ensure Cloudinary is configured before upload"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not all([
+            cloudinary.config().cloud_name,
+            cloudinary.config().api_key,
+            cloudinary.config().api_secret
+        ]):
+            configure_cloudinary()
+        return f(*args, **kwargs)
+    return decorated_function
+
+@require_cloudinary
+def upload_image_to_cloudinary(image_file):
+    """
+    Upload image to Cloudinary with error handling and retry logic
+    
+    Args:
+        image_file: File object from request.files
+    Returns:
+        str: Cloudinary secure URL of the uploaded image
+    Raises:
+        Exception: If upload fails after retries
+    """
+    max_retries = 3
+    retry_count = 0
+    
+    while retry_count < max_retries:
+        try:
+            result = cloudinary.uploader.upload(
+                image_file,
+                folder="charity_stories",
+                transformation={
+                    'width': 800,
+                    'height': 600,
+                    'crop': 'fill',
+                    'quality': 'auto:good'
+                }
+            )
+            return result['secure_url']
+        except Exception as e:
+            retry_count += 1
+            if retry_count == max_retries:
+                print(f"Failed to upload image after {max_retries} attempts: {str(e)}")
+                raise Exception("Failed to upload image to Cloudinary")
+            print(f"Upload attempt {retry_count} failed, retrying...")
 
 def validate_email(email):
     pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
@@ -734,6 +798,344 @@ class CharityDetail(Resource):
             db.session.rollback()
             return {'error': str(e)}, 500
         
+class Stories(Resource):
+    ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
+    MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+    
+    def allowed_file(self, filename):
+        return '.' in filename and \
+               filename.rsplit('.', 1)[1].lower() in self.ALLOWED_EXTENSIONS
+
+    def validate_file_size(self, file):
+        file.seek(0, 2)  # Seek to end of file
+        size = file.tell()  # Get current position (size)
+        file.seek(0)  # Reset file position
+        return size <= self.MAX_FILE_SIZE
+
+    @jwt_required()
+    def post(self):
+        """Create a new story with improved image upload handling"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+            
+            # Validate form data
+            title = request.form.get('title')
+            content = request.form.get('content')
+            
+            if not title or not content:
+                return {'error': 'Missing required fields: title, content'}, 400
+            
+            # Handle image upload with improved validation
+            image_url = None
+            if 'image' in request.files:
+                image_file = request.files['image']
+                if image_file.filename == '':
+                    return {'error': 'No selected file'}, 400
+                    
+                if not self.allowed_file(image_file.filename):
+                    return {'error': f'Invalid file type. Allowed types: {", ".join(self.ALLOWED_EXTENSIONS)}'}, 400
+                    
+                if not self.validate_file_size(image_file):
+                    return {'error': f'File size exceeds maximum limit of {self.MAX_FILE_SIZE/1024/1024}MB'}, 400
+                
+                try:
+                    image_url = upload_image_to_cloudinary(image_file)
+                except Exception as e:
+                    return {"error": f"Image upload failed: {str(e)}"}, 500
+            
+            # Create new story
+            new_story = Story(
+                charity_id=user.charity_profile.id,
+                title=title,
+                content=content,
+                image_url=image_url,
+                created_at=datetime.utcnow()
+            )
+            
+            db.session.add(new_story)
+            db.session.commit()
+            
+            return {
+                'message': 'Story created successfully',
+                'story': {
+                    'id': new_story.id,
+                    'title': new_story.title,
+                    'content': new_story.content,
+                    'image_url': new_story.image_url,
+                    'created_at': new_story.created_at.strftime('%Y-%m-%d')
+                }
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+        
+    @jwt_required()
+    def get(self):
+        """Get all stories for a charity"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+                
+            # Get query parameters for pagination
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            
+            # Query stories with pagination
+            stories = Story.query.filter_by(
+                charity_id=user.charity_profile.id
+            ).order_by(
+                Story.created_at.desc()
+            ).paginate(
+                page=page,
+                per_page=per_page,
+                error_out=False
+            )
+            
+            return {
+                'stories': [{
+                    'id': story.id,
+                    'title': story.title,
+                    'content': story.content,
+                    'image_url': story.image_url,
+                    'created_at': story.created_at.strftime('%Y-%m-%d')
+                } for story in stories.items],
+                'pagination': {
+                    'total_items': stories.total,
+                    'total_pages': stories.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': stories.has_next,
+                    'has_prev': stories.has_prev
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+class Beneficiaries(Resource):
+    @jwt_required()
+    def post(self):
+        """Create a new beneficiary"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+                
+            data = request.get_json()
+            
+            # Validate required fields
+            required_fields = ['name']
+            if not all(field in data for field in required_fields):
+                return {'error': f'Missing required fields: {", ".join(required_fields)}'}, 400
+                
+            new_beneficiary = Beneficiary(
+                charity_id=user.charity_profile.id,
+                name=data['name'],
+                age=data.get('age'),
+                school=data.get('school'),
+                location=data.get('location')
+            )
+            
+            db.session.add(new_beneficiary)
+            db.session.commit()
+            
+            return {
+                'message': 'Beneficiary created successfully',
+                'beneficiary': {
+                    'id': new_beneficiary.id,
+                    'name': new_beneficiary.name,
+                    'age': new_beneficiary.age,
+                    'school': new_beneficiary.school,
+                    'location': new_beneficiary.location
+                }
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+    @jwt_required()
+    def get(self):
+        """Get all beneficiaries for a charity"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+                
+            # Get query parameters for pagination
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            
+            # Query beneficiaries with pagination
+            beneficiaries = Beneficiary.query.filter_by(
+                charity_id=user.charity_profile.id
+            ).paginate(
+                page=page,
+                per_page=per_page,
+                error_out=False
+            )
+            
+            return {
+                'beneficiaries': [{
+                    'id': beneficiary.id,
+                    'name': beneficiary.name,
+                    'age': beneficiary.age,
+                    'school': beneficiary.school,
+                    'location': beneficiary.location
+                } for beneficiary in beneficiaries.items],
+                'pagination': {
+                    'total_items': beneficiaries.total,
+                    'total_pages': beneficiaries.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': beneficiaries.has_next,
+                    'has_prev': beneficiaries.has_prev
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+class Inventory(Resource):
+    @jwt_required()
+    def post(self):
+        """Add new inventory item"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+                
+            data = request.get_json()
+            
+            # Validate required fields
+            required_fields = ['name', 'quantity']
+            if not all(field in data for field in required_fields):
+                return {'error': f'Missing required fields: {", ".join(required_fields)}'}, 400
+                
+            # Validate beneficiary if provided
+            beneficiary_id = data.get('beneficiary_id')
+            if beneficiary_id:
+                beneficiary = db.session.get(Beneficiary, beneficiary_id)
+                if not beneficiary or beneficiary.charity_id != user.charity_profile.id:
+                    return {'error': 'Invalid beneficiary ID'}, 400
+                
+            new_item = InventoryItem(
+                charity_id=user.charity_profile.id,
+                name=data['name'],
+                quantity=data['quantity'],
+                beneficiary_id=beneficiary_id,
+                distribution_date=datetime.strptime(data['distribution_date'], '%Y-%m-%d') if 'distribution_date' in data else None
+            )
+            
+            db.session.add(new_item)
+            db.session.commit()
+            
+            return {
+                'message': 'Inventory item added successfully',
+                'item': {
+                    'id': new_item.id,
+                    'name': new_item.name,
+                    'quantity': new_item.quantity,
+                    'beneficiary_id': new_item.beneficiary_id,
+                    'distribution_date': new_item.distribution_date.strftime('%Y-%m-%d') if new_item.distribution_date else None
+                }
+            }, 201
+            
+        except Exception as e:
+            db.session.rollback()
+            return {'error': str(e)}, 500
+
+    @jwt_required()
+    def get(self):
+        """Get all inventory items for a charity"""
+        try:
+            # Get current user
+            current_user_id = get_jwt_identity()
+            user = db.session.get(User, current_user_id)
+            
+            if not user or user.user_type != UserType.CHARITY:
+                return {'error': 'Unauthorized'}, 403
+            
+            if not user.charity_profile:
+                return {'error': 'Charity profile not found'}, 404
+                
+            # Get query parameters for pagination and filtering
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            beneficiary_id = request.args.get('beneficiary_id', type=int)
+            
+            # Build query
+            query = InventoryItem.query.filter_by(charity_id=user.charity_profile.id)
+            if beneficiary_id:
+                query = query.filter_by(beneficiary_id=beneficiary_id)
+                
+            # Execute query with pagination
+            inventory = query.paginate(
+                page=page,
+                per_page=per_page,
+                error_out=False
+            )
+            
+            return {
+                'inventory': [{
+                    'id': item.id,
+                    'name': item.name,
+                    'quantity': item.quantity,
+                    'beneficiary_id': item.beneficiary_id,
+                    'distribution_date': item.distribution_date.strftime('%Y-%m-%d') if item.distribution_date else None,
+                    'created_at': item.created_at.strftime('%Y-%m-%d')
+                } for item in inventory.items],
+                'pagination': {
+                    'total_items': inventory.total,
+                    'total_pages': inventory.pages,
+                    'current_page': page,
+                    'per_page': per_page,
+                    'has_next': inventory.has_next,
+                    'has_prev': inventory.has_prev
+                }
+            }, 200
+            
+        except Exception as e:
+            return {'error': str(e)}, 500
+
+
+api.add_resource(Stories, '/stories')
+api.add_resource(Beneficiaries, '/beneficiaries')
+api.add_resource(Inventory, '/inventory')
 api.add_resource(ProfileDetails, '/profile-details')
 api.add_resource(Register, '/register')
 api.add_resource(VerifyEmail, '/verify-email')
