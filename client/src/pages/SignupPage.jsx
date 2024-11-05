@@ -65,7 +65,6 @@ const SignupPage = () => {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen">
-      {/* Left Section: Signup Form */}
       <div className="flex items-center justify-center bg-white p-8">
         <div className="w-full max-w-md">
           
@@ -80,7 +79,6 @@ const SignupPage = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Username */}
             <div className="mb-4">
               <label htmlFor="username" className="block mb-2 text-sm font-medium text-gray-700">
                 Username
@@ -95,7 +93,6 @@ const SignupPage = () => {
               />
             </div>
 
-            {/* Email */}
             <div className="mb-4">
               <label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-700">
                 Email
@@ -110,7 +107,6 @@ const SignupPage = () => {
               />
             </div>
 
-            {/* Password */}
             <div className="mb-4">
               <label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-700">
                 Password
@@ -125,7 +121,7 @@ const SignupPage = () => {
               />
             </div>
 
-            {/* User Type */}
+
             <div className="mb-4">
               <label htmlFor="user_type" className="block mb-2 text-sm font-medium text-gray-700">
                 User Type
@@ -143,7 +139,7 @@ const SignupPage = () => {
               </select>
             </div>
 
-            {/* Conditional fields for Donor */}
+
             {userType === 'donor' && (
               <>
                 <div className="mb-4">
@@ -175,7 +171,7 @@ const SignupPage = () => {
               </>
             )}
 
-            {/* Conditional fields for Charity */}
+
             {userType === 'charity' && (
               <>
                 <div className="mb-4">
@@ -265,7 +261,6 @@ const SignupPage = () => {
         </div>
       </div>
 
-      {/* Right Section: Image with Overlay Text */}
       <div
         className="relative hidden md:flex items-center justify-center bg-cover bg-center"
         style={{ backgroundImage: `url(${backgroundImage})` }}
