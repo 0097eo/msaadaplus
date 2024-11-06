@@ -1,12 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { AlertCircle } from 'lucide-react';
-import backgroundImage from '../assets/loginbg.jpg'
+import { useNavigate } from 'react-router-dom';
+import backgroundImage from '../assets/loginbg.jpg';
 
 const LoginPage = () => {
-  const { login, error, isLoading } = useAuth();
+  const { login, error, isLoading, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const navigate = useNavigate();
+
+  const getRedirectPath = (userType) => {
+    switch (userType.toLowerCase()) {
+      case 'donor':
+        return '/charities';
+      case 'charity':
+        return '/profile';
+      case 'admin':
+        return '/applications';
+      default:
+        return '/';
+    }
+  };
+
+  // Handle redirect when user state changes
+  useEffect(() => {
+    if (user && user.userType) {
+      const redirectPath = getRedirectPath(user.userType);
+      navigate(redirectPath);
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
