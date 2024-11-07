@@ -57,7 +57,6 @@ const Navbar = () => {
         return [
           { to: '/charities', label: 'Charities' },
           { to: '/donations', label: 'My Donations' },
-          { to: '/stories', label: 'Impact Stories' },
           { to: '/auto-donate', label: 'Auto-Donate' }
         ];
       case 'charity':
@@ -70,7 +69,6 @@ const Navbar = () => {
         return [
           { to: '/applications', label: 'Applications' },
           { to: '/manage-charities', label: 'Manage Charities' },
-          { to: '/settings', label: 'Settings' }
         ];
       default:
         return [
@@ -103,9 +101,11 @@ const Navbar = () => {
             <div className="flex items-center space-x-4">
               {isAuthenticated ? (
                 <div className="flex items-center space-x-4">
-                  <NavItem to="/profile" setIsOpen={setIsOpen}>
-                    Profile
-                  </NavItem>
+                  {user?.userType !== 'admin' && (
+                    <NavItem to="/profile" setIsOpen={setIsOpen}>
+                      Profile
+                    </NavItem>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="text-white hover:text-gray-800 transition-colors duration-200"
@@ -153,9 +153,11 @@ const Navbar = () => {
             {isAuthenticated ? (
               <>
                 {/* Profile Link for Mobile */}
-                <NavItem to="/profile" setIsOpen={setIsOpen}>
-                  Profile
-                </NavItem>
+                {user?.userType !== 'admin' && (
+                  <NavItem to="/profile" setIsOpen={setIsOpen}>
+                    Profile
+                  </NavItem>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full bg-gray-700 hover:bg-gray-800 px-4 py-2 rounded-full text-white font-medium transition-colors duration-200 mt-2"
