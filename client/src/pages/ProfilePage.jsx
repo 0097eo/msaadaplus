@@ -121,7 +121,6 @@ const ProfilePage = () => {
                   <td className="px-6 py-4">KES {donation.amount}</td>
                   <td className="px-6 py-4">{donation.charity_name}</td>
                   <td className="px-6 py-4">
-                  Copy
                   <span className={`px-2 py-1 rounded-full text-xs ${
                     donation.payment_status === 'completed' ? 'bg-green-100 text-green-800' 
                     : donation.payment_status === 'failed' ? 'bg-red-100 text-red-800'
