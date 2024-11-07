@@ -80,6 +80,7 @@ class CharityProfile(db.Model):
     beneficiaries = db.relationship('Beneficiary', backref='charity_profile')
     stories = db.relationship('Story', backref='charity_profile')
     donations = db.relationship('Donation', backref='charity_profile')
+    recurring_donation = db.relationship('RecurringDonation', backref='charity_profile')
     inventory_items = db.relationship('InventoryItem', backref='charity_profile')
 
 class Beneficiary(db.Model):
