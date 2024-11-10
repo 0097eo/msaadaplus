@@ -52,7 +52,7 @@ The platform supports three primary user roles:
 - Choose to donate anonymously or publicly.
 - Receive monthly reminders to donate.
 - Access stories of beneficiaries impacted by their donations.
-- Make donations via third-party payment platforms (e.g., PayPal, Stripe).
+- Make donations via M-Pesa.
 
 #### Charity
 - Apply to be featured on the platform.
