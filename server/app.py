@@ -123,7 +123,7 @@ def send_email(recipient, subject, body):
     try:
         with smtplib.SMTP('smtp.gmail.com', 587) as smtp:
             smtp.starttls()
-            smtp.login('emmanuelokello294@gmail.com', 'quzo ygrw gcse maim')
+            smtp.login('emmanuelokello294@gmail.com', 'ccgr zxvn tqza nwkb')
             smtp.send_message(msg)
     except Exception as e:
         print(f"Error sending email: {e}")
