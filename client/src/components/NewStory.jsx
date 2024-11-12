@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { X, Check, Loader } from 'lucide-react';
+import PropTypes from 'prop-types';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif'];
@@ -227,5 +228,11 @@ const AddStoryModal = ({ isOpen, onClose }) => {
     </div>
   );
 };
+
+AddStoryModal.propTypes = {
+  isOpen: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+};
+
 
 export default AddStoryModal;
