@@ -36,7 +36,7 @@ const LoginPage = () => {
     try {
       await login(email, password);
     } catch (err) {
-      console.error(err);
+      console.error(err.message);
     }
   };
 

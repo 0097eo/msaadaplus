@@ -29,7 +29,7 @@ const ManageCharityPage = () => {
       }
     } catch (err) {
       setError('Error fetching charities. Please try again later.');
-      console.error(err);
+      console.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -48,7 +48,7 @@ const ManageCharityPage = () => {
       }
     } catch (err) {
       setError('Error fetching charity details. Please try again later.');
-      console.error(err);
+      console.error(err.message);
     }
   };
 
@@ -72,7 +72,7 @@ const ManageCharityPage = () => {
       }
     } catch (err) {
       setError('Error deleting charity. Please try again later.');
-      console.error(err);
+      console.error(err.message);
     } finally {
       setLoading(false);
       setConfirmDelete(false);

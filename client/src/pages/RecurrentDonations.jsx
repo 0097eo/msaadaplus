@@ -39,7 +39,7 @@ const RecurringDonationsPage = () => {
             }
         } catch (err) {
             setError('Failed to fetch charities. Please try again later.');
-            console.error(err);
+            console.error(err.message);
         } finally {
             setLoading(false);
         }
@@ -58,7 +58,7 @@ const RecurringDonationsPage = () => {
             }
         } catch (err) {
             setError('Failed to fetch charity details. Please try again later.');
-            console.error(err);
+            console.error(err.message);
         }
     };
 
@@ -96,7 +96,7 @@ const RecurringDonationsPage = () => {
             }
         } catch (err) {
             setError('Failed to process donation. Please try again later.');
-            console.error(err);
+            console.error(err.message);
         } finally {
             setLoading(false);
         }

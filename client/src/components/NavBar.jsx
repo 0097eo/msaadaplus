@@ -45,7 +45,7 @@ const Navbar = () => {
       await logout();
       navigate('/');
     } catch (error) {
-      console.error('Logout failed:', error);
+      console.error(error.message);
     } finally {
       setIsOpen(false);
     }
