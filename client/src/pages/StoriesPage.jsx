@@ -5,7 +5,7 @@ import { Pencil } from 'lucide-react';
 
 
 const StoriesPage = () => {
-  const { user, authFetch } = useAuth();
+  const {authFetch } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

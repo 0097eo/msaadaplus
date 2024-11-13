@@ -58,6 +58,7 @@ const SignupPage = () => {
         }
       } catch (err) {
         setError('Network error. Please try again later.');
+        console.error(err.message);
       } finally {
         setIsLoading(false);
       }

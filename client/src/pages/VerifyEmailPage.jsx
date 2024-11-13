@@ -37,6 +37,7 @@ const EmailVerificationPage = () => {
       }
     } catch (err) {
       setError('Network error. Please try again later.');
+      console.error(err.message);
     } finally {
       setIsLoading(false);
     }
@@ -65,6 +66,7 @@ const EmailVerificationPage = () => {
       }
     } catch (err) {
       setError('Network error. Please try again later.');
+      console.error(err.message);
     } finally {
       setResendLoading(false);
     }

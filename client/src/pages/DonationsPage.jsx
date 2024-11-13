@@ -32,7 +32,7 @@ DonationSummary.propTypes = {
 };
 
 const DonorsPage = () => {
-  const { user, authFetch } = useAuth();
+  const {authFetch } = useAuth();
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
