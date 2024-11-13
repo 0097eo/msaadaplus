@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Check, X, Settings, X as CloseIcon } from 'lucide-react';
 
@@ -10,11 +10,8 @@ const CharityApplications = () => {
   const [status, setStatus] = useState('');
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    fetchCharities();
-  }, []);
 
-  const fetchCharities = async () => {
+  const fetchCharities = useCallback(async () => {
     try {
       const response = await authFetch('/api/charity/applications?status=pending');
       const data = await response.json();
@@ -22,7 +19,11 @@ const CharityApplications = () => {
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [authFetch]);
+
+  useEffect(() => {
+    fetchCharities();
+  }, [fetchCharities]);
 
   const handleReview = (charity) => {
     setCurrentCharity(charity);
