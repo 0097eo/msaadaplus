@@ -176,7 +176,7 @@ const HomePage = () => {
             <div className="md:w-1/2">
               <div className="bg-purple-100 p-8 rounded-2xl">
                 <blockquote className="text-gray-700 italic mb-4">
-                  "Thanks to the regular donations, we've been able to provide sanitary supplies to over 1,000 girls in our district, reducing school dropout rates by 60%."
+                ’’Thanks to the regular donations, we’ve been able to provide sanitary supplies to over 1,000 girls in our district, reducing school dropout rates by 60%.’’
                 </blockquote>
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-purple-200 rounded-full"></div>

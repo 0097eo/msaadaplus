@@ -68,7 +68,7 @@ const AboutPage = () => {
               Empowering Girls Through Continuous Support
             </h1>
             <p className="text-xl mb-12 text-purple-100">
-              We're bridging the education gap by connecting generous donors with verified organizations 
+              We’re bridging the education gap by connecting generous donors with verified organizations 
               providing menstrual supplies and facilities to school girls in sub-Saharan Africa.
             </p>
           </div>
@@ -87,12 +87,12 @@ const AboutPage = () => {
       <section className="py-20 bg-white">
         <div className="container mx-auto px-6">
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 text-gray-800 text-center">The Challenge We're Addressing</h2>
+            <h2 className="text-3xl font-bold mb-8 text-gray-800 text-center">The Challenge We’re Addressing</h2>
             <div className="prose lg:prose-lg mx-auto text-gray-600">
               <p className="mb-6">
                 In most sub-Saharan countries, school-going girls face a significant challenge: 
-                limited access to essential menstrual supplies and facilities. This isn't just 
-                about comfort – it's about education, dignity, and future opportunities.
+                limited access to essential menstrual supplies and facilities. This isn’t just 
+                about comfort – it’s about education, dignity, and future opportunities.
               </p>
               <p className="mb-6">
                 According to 2016 studies from the Ministry of Education, girls from poor families 
@@ -103,7 +103,7 @@ const AboutPage = () => {
               <p>
                 Our partnered organizations are working not only to provide sanitary towels but 
                 also to ensure access to clean water and proper sanitation facilities, aligning 
-                with UNICEF's guidelines for proper menstrual hygiene.
+                with UNICEF’s guidelines for proper menstrual hygiene.
               </p>
             </div>
           </div>
@@ -158,8 +158,8 @@ const AboutPage = () => {
             Join Us in Making a Difference
           </h2>
           <p className="text-xl text-purple-100 mb-8 max-w-2xl mx-auto">
-            Whether you're a donor looking to create lasting impact or a charity working to provide essential support,
-            we're here to help you make a difference.
+            Whether you’re a donor looking to create lasting impact or a charity working to provide essential support,
+            we’re here to help you make a difference.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <button onClick={handleButtonClick} className="bg-white text-purple-700 hover:bg-purple-100 px-8 py-3 rounded-full font-semibold transition duration-300">
