@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import backgroundImage from '../assets/loginbg.jpg';
 import { useNavigate } from'react-router-dom';
 
@@ -17,6 +17,7 @@ const SignupPage = () => {
   const [contactPhone, setContactPhone] = useState('');
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -64,6 +65,10 @@ const SignupPage = () => {
       }
   };
 
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 min-h-screen">
       <div className="flex items-center justify-center bg-white p-8">
@@ -108,20 +113,32 @@ const SignupPage = () => {
               />
             </div>
 
-            <div className="mb-4">
+            <div className="mb-4 relative">
               <label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-700">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-600"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-purple-600 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={togglePasswordVisibility}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
             </div>
-
 
             <div className="mb-4">
               <label htmlFor="user_type" className="block mb-2 text-sm font-medium text-gray-700">
@@ -139,7 +156,6 @@ const SignupPage = () => {
                 <option value="charity">Charity</option>
               </select>
             </div>
-
 
             {userType === 'donor' && (
               <>
@@ -171,7 +187,6 @@ const SignupPage = () => {
                 </div>
               </>
             )}
-
 
             {userType === 'charity' && (
               <>
