@@ -101,8 +101,10 @@ const CharityApplications = () => {
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-2xl font-bold">Review Charity Application</h2>
               <button
+                aria-label="Close"
                 className="text-gray-500 hover:text-gray-700 focus:outline-none"
                 onClick={handleModalClose}
+
               >
                 <CloseIcon size={20} />
               </button>
