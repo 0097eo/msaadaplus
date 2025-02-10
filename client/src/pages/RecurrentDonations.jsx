@@ -248,7 +248,7 @@ const RecurringDonationsPage = () => {
                             <div className="p-6">
                                 <div className="flex justify-between items-start mb-4">
                                     <h2 className="text-lg font-semibold">{selectedCharity.name}</h2>
-                                    <button onClick={() => setShowModal(false)}>
+                                    <button onClick={() => setShowModal(false)} aria-label='Close'>
                                         <X className="h-5 w-5 text-gray-500" />
                                     </button>
                                 </div>
